@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="200px" height="200px">
+  <path fill="black" fill-rule="evenodd" fill-opacity="0.5" stroke="none" d="M0-100L40-60 30-50 0-82 -30-50 -40-60" transform="translate(49 99) scale(1.5 1.53) rotate(90)" pointer-events="all"/>
+  <path fill="white" fill-rule="evenodd" fill-opacity="1" stroke="none" d="M0-100L40-60 30-50 0-82 -30-50 -40-60" transform="translate(49 99) scale(1.5 1.53) rotate(90)" cursor="pointer" pointer-events="all"/>
+
+</svg>
