@@ -12,7 +12,9 @@ JSComponents.ProgressBar = function(parentNode) {
 		elm_.style.position = "absolute";
 		parentNode_ = parentNode; 
 	}();
+	
 	//public API
+	
 	/**
 	 * Displays animated progress bar at location(x,y)
 	 */

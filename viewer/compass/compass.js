@@ -138,7 +138,7 @@ JSComponents.Compass = function() {
 		
 		var curDeg = getCurrentDegree();
 		//if almost no change, do nothing.
-		if(Math.abs(deg-curDeg) < 0.1) {
+		if(Math.abs(deg-curDeg) < 0.5) {
 			return;
 		}
 		rotateTransformation_.setAttribute('from',''+curDeg+' 442 442');
