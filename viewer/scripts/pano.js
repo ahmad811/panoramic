@@ -12,7 +12,11 @@ IntoSite.Defaults =
 	cameraFov : 65,
 	zoomStep : 6,
 	cameraMinFov : 15,
-	cameraMaxFov : 85
+	cameraMaxFov : 85,
+	maxLatitude : 85,
+	minLatitude : -85,
+	latitudeStep : 1.0,
+	longitudeStep : 1.5
 };
 /**
  * Constructor
@@ -69,11 +73,6 @@ IntoSite.PanoramaViewer = function(parentContainer, panoOptions) {
     this.textOfNeighbourLinksContainer = new THREE.Group();
     this.scene.add(this.textOfNeighbourLinksContainer);
 
-    // mouse position when hover - this is used for checkhighlightF
-    this.mouseMove = {
-        x : 0,
-        y : 0
-    };
     // base color of the links/arrow
     this.baseColor = new THREE.Color(0xffffff);
     // highlighted Color of the links/arrows
@@ -87,44 +86,17 @@ IntoSite.PanoramaViewer = function(parentContainer, panoOptions) {
 
     this.enableMouseEvent=true;
     
-    this.spriteUtils = new THREE.SpriteUtils();
     // setup the mouse/key listeners!
-  
-    var _onMouseMove = bind(this, this.onMouseMove);
+	var _onMouseMove = bind(this, this.onMouseMove);
     var _onMouseDown = bind(this, this.onMouseDown);
-    var _onMouseUp = bind(this, this.onMouseUp);
-    var _onMouseWheel = bind(this, this.onMouseWheel);
-    var _onKeyDown = bind(this, this.onKeyDown);
-    var _onKeyUp = bind(this, this.onKeyUp);
-    var _resizeHandler = bind(this, this.onWindowResize);
-
-    var domElement = this.renderer.domElement;
+	var _resizeHandler = bind(this, this.onWindowResize);
+	var domElement = this.renderer.domElement;
     domElement.addEventListener('mousemove', _onMouseMove, false);
     domElement.addEventListener('mousedown', _onMouseDown, false);
-    domElement.addEventListener('mouseup', _onMouseUp, false);
-    domElement.addEventListener('mousewheel', _onMouseWheel, false);
-    domElement.addEventListener('MozMousePixelScroll', _onMouseWheel, false); // mozilla
-    window.addEventListener('keydown', _onKeyDown, false);
-    window.addEventListener('keyup', _onKeyUp, false);
-    window.addEventListener('resize', _resizeHandler, false);
+	window.addEventListener('resize', _resizeHandler, false);
+  
+	this.controls = new THREE.PerspectiveControls(this.camera, this.renderer.domElement);
 	
-    this.dispose = function() {
-        self.renderer.domElement.removeEventListener('mousedown', _onMouseDown,
-                false);
-        self.renderer.domElement.removeEventListener('mousemove', _onMouseMove,
-                false);
-        self.renderer.domElement.removeEventListener('mouseup', _onMouseUp,
-                false);
-        self.renderer.domElement.removeEventListener('mousewheel',
-                _onMouseWheel, false);
-        self.renderer.domElement.removeEventListener('MozMousePixelScroll',
-                _onMouseWheel, false);
-
-        window.removeEventListener('keydown', _onKeyDown, false);
-        window.removeEventListener('keyup', _onKeyUp, false);
-        window.removeEventListener('resize', _resizeHandler, false);
-    };
-
     function bind(scope, fn) {
         return function() {
             fn.apply(scope, arguments);
@@ -152,8 +124,13 @@ IntoSite.PanoramaViewer = function(parentContainer, panoOptions) {
 
 IntoSite.PanoramaViewer.prototype.constructor = IntoSite.PanoramaViewer;
 
+/**
+ * Enable or Disable mouse events of the pano.
+ * This will be disabled for example when DnD sprites...
+ */
 IntoSite.PanoramaViewer.prototype.enableMouseEvents = function(b) {
     this.enableMouseEvent = b;
+	this.controls.isActive = b;
 }
 /*
  * Loads the given pano options into the viewer
@@ -173,6 +150,7 @@ IntoSite.PanoramaViewer.prototype.load = function(panoOptions, callback) {
 
     // first clear up any links in current panorama
     this.clearLinks();
+	//Don't allow DnD while loading new pano.
     this.dndMgr.clearObjects();
 	self.dndMgr.deactivate();
     // Now, load the image/panoramic
@@ -192,18 +170,7 @@ IntoSite.PanoramaViewer.prototype.load = function(panoOptions, callback) {
 					self.sphereMaterial.map = texture;
 					self.sphereMaterial.needsUpdate = true;
 						
-					self.longitude = 0; // longitude to the centre of the panaroma
-					// image.
-					if (typeof panoOptions.options.centerHeading !== 'undefined'
-							&& panoOptions.options.centerHeading !== 0) {
-						self.longitude -= panoOptions.options.centerHeading;
-					}
-					self.latitude = 0;
-					self.savedX = 0;
-					self.savedY = 0;
-					self.savedLongitude = 0;
-					self.savedLatitude = 0;
-					self.isMouseDown = false;
+					self.controls.reset();
 				   
 					if (callback !== undefined) {
 						callback();
@@ -213,26 +180,26 @@ IntoSite.PanoramaViewer.prototype.load = function(panoOptions, callback) {
 
 };
 
+/**
+ * Add me as rotate & zoom listener to the compass.
+ * This will allow pano viewer to rotate/zoom the pano when user
+ * clicks the compass objects.
+ */
 IntoSite.PanoramaViewer.prototype.initializeCompass = function() {
 	var self = this;
 	compass.addRotateEventListener(function(deg) {
-		//rotate the canvas with animation
-		var dif = Math.abs(deg-self.longitude);
-		var t = 0;
-		if(dif<90) t= 0.5;
-		else if(dif<180) t=1;
-		else t=1.5;
-		TweenLite.to(self, t, {longitude: deg});
+		self.controls.rotate(deg);
 	});
 	compass.addZoomEventListeners(function(type) {
 		if(type==='zoomIn'){
-			zoomInOut(self.camera, self.camera.fov-IntoSite.Defaults.zoomStep);
+			self.controls.zoomInOut(self.camera.fov-IntoSite.Defaults.zoomStep,true);
 		}
 		else if(type==='zoomOut') {
-			zoomInOut(self.camera, self.camera.fov+IntoSite.Defaults.zoomStep);
+			self.controls.zoomInOut(self.camera.fov+IntoSite.Defaults.zoomStep,true);
 		}
 		else if(type==='zoomReset') {
-			zoomInOut(self.camera, IntoSite.Defaults.cameraFov);
+			//reset w/o animatiom
+			self.controls.zoomInOut(IntoSite.Defaults.cameraFov,true);
 		}
 	});
 };
@@ -290,7 +257,7 @@ IntoSite.PanoramaViewer.prototype.setLinks = function(linksArray, callback) {
                         var dist = self.myLoc.distanceTo(otherLoc);
                         linkMesh.translateX(0.4 + dist / 1000.0);
                         // create and locate the text
-                        var txt = self.spriteUtils.createTextSprite(linkObject.options.name,{textWidthScale: 0.3, textHeightScale:0.12, textColor: {r:250,g:250,b:250, a:1}});
+                        var txt = new THREE.SpriteUtils().createTextSprite(linkObject.options.name,{textWidthScale: 0.3, textHeightScale:0.12, textColor: {r:250,g:250,b:250, a:1}});
                         txt.rotation.x = -Math.PI / 2;
                         txt.rotation.z = alpha;
                         txt.translateX(0.45 + dist / 1000.0);
@@ -322,47 +289,23 @@ IntoSite.PanoramaViewer.prototype.clearLinks = function() {
 
 IntoSite.PanoramaViewer.prototype.render = function() {
 
-    // limiting latitude from -85 to 85 (cannot point to the sky or under your
-    // feet)
-    this.latitude = Math.max(-85, Math.min(85, this.latitude));
-    var xDirection = Math.sin(THREE.Math.degToRad(90 - this.latitude))
-            * Math.cos(THREE.Math.degToRad(this.longitude));
-    var yDirection = Math.cos(THREE.Math.degToRad(90 - this.latitude));
-    var zDirection = Math.sin(THREE.Math.degToRad(90 - this.latitude))
-            * Math.sin(THREE.Math.degToRad(this.longitude));
-
-    this.camera.target.x = 500 * xDirection;
-    this.camera.target.y = 500 * yDirection
-    this.camera.target.z = 500 * zDirection;
-
+	//update the perspective controls
+	this.controls.update();
     // position the links group in front of the camera!
-    var fact = 2;
-    this.neighbourLinksContainer.position.set(fact * xDirection, -1,
-            fact * zDirection);
-    this.textOfNeighbourLinksContainer.position.set(fact * xDirection, -1,
-            fact * zDirection);
-    
-//    this.placeMartksContainer.position.set(fact * xDirection, -1,
-//            fact * zDirection);
-
-    // if mouse down - means, DnD, then no highlight is needed
-    if (!this.isMouseDown) {
-        this.checkHighlight();
-    }
-	
-	//
-    this.camera.lookAt(this.camera.target);
-
-	if(this.shaderMixer!==undefined) {
+    var fact = 2/500;
+    this.neighbourLinksContainer.position.set(fact * this.camera.target.x, -1,
+            fact * this.camera.target.z);
+    this.textOfNeighbourLinksContainer.position.set(fact * this.camera.target.x, -1,
+            fact * this.camera.target.z);
+    //If there is shader on
+    if(this.shaderMixer!==undefined) {
 		this.shaderMixer.render();
 	}
 	else {
 		this.renderer.render(this.scene, this.camera);
 	}
-	
 	//update the compass
-	compass.rotate(this.longitude);
-
+	compass.rotate(this.controls.longitude);
 };
 
 IntoSite.PanoramaViewer.prototype.getIntersectedObjects = function(mouseX,
@@ -379,7 +322,7 @@ IntoSite.PanoramaViewer.prototype.getIntersectedObjects = function(mouseX,
 }
 
 IntoSite.PanoramaViewer.prototype.onMouseDown = function(event) {
-if(this.enableMouseEvent==false)return;
+	if(this.enableMouseEvent==false)return;
     event.preventDefault();
     event.stopPropagation();
     var self = this;
@@ -389,20 +332,12 @@ if(this.enableMouseEvent==false)return;
         self.onPanoLinkClicked(event, intersects[0].object);
         return;
     }
-    this.isMouseDown = true;
-
-    this.savedX = event.clientX;
-    this.savedY = event.clientY;
-
-    this.savedLongitude = this.longitude;
-    this.savedLatitude = this.latitude;
 };
 
-IntoSite.PanoramaViewer.prototype.checkHighlight = function() {
+IntoSite.PanoramaViewer.prototype.checkHighlight = function(mouseX, mouseY) {
 
     // first check if mouse is clicked on the link objects
-    var intersects = this.getIntersectedObjects(this.mouseMove.x,
-            this.mouseMove.y);
+    var intersects = this.getIntersectedObjects(mouseX,mouseY);
     var clearHighlight = false;
     // if there is one (or more) intersections
     if (intersects.length > 0) {
@@ -443,88 +378,12 @@ IntoSite.PanoramaViewer.prototype.checkHighlight = function() {
     }
 };
 
-IntoSite.PanoramaViewer.prototype.onMouseUp = function(event) {
-
-    event.preventDefault();
-    event.stopPropagation();
-
-    this.isMouseDown = false;
-};
-
 IntoSite.PanoramaViewer.prototype.onMouseMove = function(event) {
     if(this.enableMouseEvent===false)return;
     
-    if (this.isMouseDown === true) {
-
-        this.longitude = (this.savedX - event.clientX) * 0.1
-                + this.savedLongitude;
-        this.latitude = (event.clientY - this.savedY) * 0.1
-                + this.savedLatitude;
-    }
-    // Check for hover over the linkObject
-    else {
-        this.mouseMove.x = event.clientX;
-        this.mouseMove.y = event.clientY;
-    }
+	this.checkHighlight(event.clientX, event.clientY);
 };
 
-IntoSite.PanoramaViewer.prototype.onMouseWheel = function(event) {
-    if(this.enableMouseEvent===false)return;
-    // WebKit
-    var newFov = this.camera.fov;
-    if (event.wheelDeltaY) {
-
-        newFov -= event.wheelDeltaY * 0.05;
-
-    // Opera / Explorer 9
-    } else if (event.wheelDelta) {
-
-        newFov -= event.wheelDelta * 0.05;
-    // Firefox
-    } else if (event.detail) {
-
-        newFov += event.detail * 1.0;
-    }
-    zoomInOut(this.camera, newFov);
-};
-
-function zoomInOut (camera, newFov) {
- // keep fov in the range of 15 to 85
-    newFov = Math.min(Math.max(newFov, IntoSite.Defaults.cameraMinFov), IntoSite.Defaults.cameraMaxFov);
-    camera.fov = newFov;
-    camera.updateProjectionMatrix();
-};
-
-IntoSite.PanoramaViewer.prototype.onKeyDown = function(event) {
-    if(this.enableMouseEvent===false)return;
-    // up arrow
-    if (event.keyCode == 38) {
-        this.latitude += 1.0;
-    }
-    // down arrow
-    else if (event.keyCode == 40) {
-        this.latitude -= 1.0;
-    }
-    // left arrow:
-    else if (event.keyCode == 37) {
-        this.longitude -= 1.5;
-    }
-    // right arrow
-    else if (event.keyCode == 39) {
-        this.longitude += 1.5;
-    }
-    // + key for zoom
-    else if(event.keyCode == 107) {
-        zoomInOut(this.camera, this.camera.fov-IntoSite.Defaults.zoomStep);
-    }
-    // - key for zoom
-    else if(event.keyCode == 109) {
-        zoomInOut(this.camera, this.camera.fov+IntoSite.Defaults.zoomStep);
-    }
-};
-
-IntoSite.PanoramaViewer.prototype.onKeyUp = function(event) {
-}
 
 IntoSite.PanoramaViewer.prototype.onWindowResize = function(event) {
 
@@ -572,7 +431,7 @@ IntoSite.PanoramaViewer.prototype.onPanoLinkClicked = function(event,
 		var f1 = self.camera.fov ;
 		var tw2 = TweenLite.to(self.camera, 1.5, {fov: f1+35 , onUpdate : onUpdateTween});
 
-		
+		//W/o those timeouts, tweenlite will not work as expected.
 		setTimeout(function() {
 
 			self.load(linkObject.linkInfo, function() {
@@ -657,6 +516,7 @@ THREE.Math.atan2 = function (v1, v2) {
 
     return (Math.atan2(nv2.y, nv2.x) - Math.atan2(nv1.y, nv1.x));
 }
+
 THREE.Math.acos = function (v1, v2) {
 
     return v1.angleTo(new THREE.Vector3().subVectors(v2, v1));

@@ -10,7 +10,7 @@
 * ...
 * render() {
 * ...
-*   if(material.uniforms.progress.value < 1) {
+*   if(material.uniforms.progress.value < Math.PI/2) {
 *      material.uniforms.progress.value +=0.01;
 *   }
 * }
@@ -623,14 +623,17 @@ THREE.ShaderMixers = function(renderer, scene, camera) {
 		mesh_.material.uniforms.to.value = newText;
 		mesh_.material.needsUpdate = true;
 		scene_.add(mesh_);
-		//if wanted to have callback when the mix testure is done
+		//if wanted to have callback when the mix texture is done
 		completeCallback_ = onDone;
+		//this param means that the renderer should render this scene_
+		//and not the one we got in the CTOR from pano.
+		//FIXME - this should be fixed in more elegant way
 		shouldUpdateMe_ = true;
 	};
 	
 	this.render = function() {
 		renderer.clear();
-		//
+		//In case the shader didn't finish
 		if(shouldUpdateMe_) {
 			if(mesh_.material.uniforms.progress.value < Math.PI/2) {
 				mesh_.material.uniforms.progress.value += 0.02;
